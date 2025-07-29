@@ -5,6 +5,7 @@
 #include <string>
 #include <SFML/Graphics.hpp>
 #include "Card.h"
+#include <thread>
 #define PI 3.141592654
 
 using namespace std;
@@ -12,9 +13,9 @@ using namespace sf;
 
 struct Deck
 {
-    void addCard(vec2 anchorPos, vec2 size, string frontTexturePath, string backTexturePath)
+    void addCard(vec2 anchorPos, vec2 size, string frontTexturePath, string backTexturePath, function<vector<any>(OnUseCardContext ctx)> onUse)
     {
-        cards.emplace_back(Card(anchorPos, size, frontTexturePath, backTexturePath));
+        cards.emplace_back(Card(anchorPos, size, frontTexturePath, backTexturePath, onUse));
     }
 
     void drawCards(RenderWindow& window)
@@ -67,19 +68,36 @@ struct Deck
 
     void giveHand(int cardCount, vec2u winSize, float spacing)
     {
-        float angle = 90;
+
+        this_thread::sleep_for(400ms);
+        float angle = 110;
         float ratio = angle / cardCount;
         vec2 center = vec2(winSize.x / 2.f, winSize.y);
         float sides = (180 - angle) / 2.f;
         for(int i = 0; i < cardCount; i++)
         {
+            cards[i].setAnchorPos(vec2(center.x, center.y - 50));
 
+            this_thread::sleep_for(100ms);
+            cards[i].flip(0.2f);
+            this_thread::sleep_for(200ms);
+        }
+
+        for(int i = 0; i < cardCount; i++)
+        {
+            this_thread::sleep_for(100ms);
             float angleAsDeg = ratio * i + sides;
             float angleAsRad = (float)angleAsDeg * PI/180.f;
-            cards[cards.size()-1-i].setAnchorPos(vec2(center.x - cos(angleAsRad) * spacing, center.y - sin(angleAsRad)* spacing));
-            cards[cards.size()-1-i].setTargetRotation(angleAsDeg - 90);
-            //this_thread::sleep_for(300ms);
+            {
+                cards[i].setAnchorPos(vec2(center.x - cos(angleAsRad) * spacing, center.y - sin(angleAsRad)* spacing));
+                cards[i].setTargetRotation(angleAsDeg - 90);
+            }
+
         }
+
+        this_thread::sleep_for(1000ms);
+
+
     }
 
     int getCardOnCur(vec2 mousepos)
@@ -94,8 +112,8 @@ struct Deck
         for(auto& c : cards)c.setCardTranslationDuration(duration);
     }
     vector<Card> cards;
-    bool holding;
-    int heldCardIndex;
+    bool holding = false;
+    int heldCardIndex = -1;
     vec2 heldCardOffset;
 
 };

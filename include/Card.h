@@ -5,6 +5,9 @@
 #include <iostream>
 #include <string>
 #include <cmath>
+#include <any>
+#include <functional>
+#include "OnUseCardContext.hpp"
 #define PI 3.141592654
 
 using namespace std;
@@ -17,7 +20,7 @@ class Card
 {
     public:
         Card();
-        Card(vec2 anchorPos, vec2 size, string frontTexturePath, string backTexturePath);
+        Card(vec2 anchorPos, vec2 size, string frontTexturePath, string backTexturePath, function<vector<any>(OnUseCardContext ctx)> onUse);
         void flip(float durationSeconds);
         void setSize(vec2 size);
         void setFlipped(bool state, float durationSeconds);
@@ -25,21 +28,27 @@ class Card
         void setRotation(float angle);
         void setPos(vec2 pos);
         void setAnchorPos(vec2 pos);
+		vector<any> callOnUse(OnUseCardContext ctx);
+        void setAlpha(float alpha);
         bool getCollision(vec2 point);
         void setTargetRotation(float angle);
         bool getCollision(RectangleShape rect);
         void setCardTranslationDuration(float duration);
         void update(float dt);
         vec2 getPos();
+        vec2 getAnchorPos();
         void draw(RenderWindow& window);
+        RectangleShape sprite;
+		bool getFlipped();
+		vector<any> args;
     private:
         bool flipped;
         vec2 targetScale;
         float speed = 1.0;
-        float animationDuration;
+        float animationDuration = 1.0;
         float targetRotation = 0.f;
         vec2 anchorPos;
-        RectangleShape sprite;
+		function<vector<any>(OnUseCardContext ctx)> onUse;
         Texture frontTexture;
         Texture backTexture;
 };
