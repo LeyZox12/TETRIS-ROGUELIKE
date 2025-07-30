@@ -13,10 +13,10 @@ using namespace sf;
 
 struct Deck
 {
-    void addCard(vec2 anchorPos, vec2 size, string frontTexturePath, string backTexturePath, function<vector<any>(OnUseCardContext ctx)> onUse)
-    {
-        cards.emplace_back(Card(anchorPos, size, frontTexturePath, backTexturePath, onUse));
-    }
+    //void addCard(vec2 anchorPos, vec2 size, string frontTexturePath, string backTexturePath, function<vector<any>(OnUseCardContext ctx)> onUse)
+    //{
+      //  cards.emplace_back(Card(anchorPos, size, frontTexturePath, backTexturePath, onUse));
+    //}
 
     void drawCards(RenderWindow& window)
     {
@@ -61,14 +61,11 @@ struct Deck
                 heldCardIndex = -1;
             }
         }
-
-        //for(auto& c : cards) c.setTargetRotation(fmod(mousepos.x, 180)-90);
-
+				
     }
 
     void giveHand(int cardCount, vec2u winSize, float spacing)
     {
-
         this_thread::sleep_for(400ms);
         float angle = 110;
         float ratio = angle / cardCount;
@@ -77,13 +74,13 @@ struct Deck
         for(int i = 0; i < cardCount; i++)
         {
             cards[i].setAnchorPos(vec2(center.x, center.y - 50));
-
+			hand.push_back(i);
             this_thread::sleep_for(100ms);
             cards[i].flip(0.2f);
             this_thread::sleep_for(200ms);
         }
 
-        for(int i = 0; i < cardCount; i++)
+        for(float i = 0.5; i < cardCount; i++)
         {
             this_thread::sleep_for(100ms);
             float angleAsDeg = ratio * i + sides;
@@ -99,6 +96,34 @@ struct Deck
 
 
     }
+	
+	void removeCard(int index, vec2 winSize)
+	{
+		if(index >= 0 && index < cards.size())
+		{
+			cards.erase(cards.begin() + index);
+			if(count(hand.begin(), hand.end(), index) == 1)hand.erase(find(hand.begin(), hand.end(), index));
+			for(auto& handIndex : hand) if(handIndex > index) handIndex--;
+		}
+		cout << hand.size() << endl;		
+        float spacing = 110;
+		float angle = 110;
+        float ratio = angle / hand.size();
+        vec2 center = vec2(winSize.x / 2.f, winSize.y);
+        float sides = (180 - angle) / 2.f;
+		float i = 0.5f;
+        for(auto& index : hand)
+        {
+            float angleAsDeg = ratio * i + sides;
+            float angleAsRad = (float)angleAsDeg * PI/180.f;
+            {
+                cards[index].setAnchorPos(vec2(center.x - cos(angleAsRad) * spacing, center.y - sin(angleAsRad)* spacing));
+                cards[index].setTargetRotation(angleAsDeg - 90);
+            }
+			i++;
+        }
+
+	}
 
     int getCardOnCur(vec2 mousepos)
     {
@@ -113,6 +138,7 @@ struct Deck
     }
     vector<Card> cards;
     bool holding = false;
+	vector<int> hand;
     int heldCardIndex = -1;
     vec2 heldCardOffset;
 

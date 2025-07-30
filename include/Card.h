@@ -20,7 +20,7 @@ class Card
 {
     public:
         Card();
-        Card(vec2 anchorPos, vec2 size, string frontTexturePath, string backTexturePath, function<vector<any>(OnUseCardContext ctx)> onUse);
+        Card(vec2 anchorPos, vec2 size, string frontTexturePath, string backTexturePath, function<vector<any>(OnUseCardContext ctx)> onUse, vector<vec2> pieceOnPlace, function<vector<any>(OnUpdateContext ctx)> pointsFunc);
         void flip(float durationSeconds);
         void setSize(vec2 size);
         void setFlipped(bool state, float durationSeconds);
@@ -41,6 +41,8 @@ class Card
         RectangleShape sprite;
 		bool getFlipped();
 		vector<any> args;
+		vector<vec2> pieceOnPlace;
+		function<vector<any>(OnUpdateContext ctx)> pointsFunc;
     private:
         bool flipped;
         vec2 targetScale;

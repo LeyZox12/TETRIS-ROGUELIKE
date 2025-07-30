@@ -2,7 +2,9 @@
 #include <SFML/Graphics.hpp>
 #include "../../class/PointEngine/include/PointEngine.h"
 #include <thread>
+#include <future>
 #include "Deck.hpp"
+#include "OnUseCardContext.hpp"
 #include "../../class/UIutils.h"
 #define pi 3.141592654
 
@@ -15,6 +17,7 @@ using vec2u = Vector2u;
 RenderWindow window(VideoMode({1000, 1000}), "Tetris Weird");
 PointEngine pe;
 UIutils ui;
+vector<future<void>> pool;
 
 const int BORDER_SIZE = 100;
 const int RADIUS = (window.getSize().x - 2 * BORDER_SIZE) / 20 - 1;
@@ -22,86 +25,84 @@ const int RECT_SIZE = (window.getSize().x - 2 * BORDER_SIZE) / 10;
 const int VERTICAL = 8;
 const Color DISPLAY_COLOR = Color::White;
 const int COUNT_TO_LINE = 7;
+const int ANGLE_OFFSET_ON_ROT = 90;
 
 sf::Clock deltaClock;
 float dt = 0.016f;
 int rotation = 0;
 int currentPiece = 0;
 int timer = 0;
-//0.74
-
+RectangleShape placingZone({560, 200});
+Texture placingZoneTexture;
 
 Deck deck;
-Card testCard(vec2(300, 800), vec2(150, 200), "res/long-I.png", "res/defaultCard.png");
-
-
-vector<vector<vec2>> pieces =
+namespace Piece
 {
-    //square
+    vector<vec2> square =
     {
         vec2(0, 0),
         vec2(0, 1),
         vec2(1, 1),
         vec2(1, 0)
-    },
-    //L
+    };
+    vector<vec2> I =
     {
         vec2(0, 0),
         vec2(0, 1),
         vec2(0, 2),
         vec2(0,3)
-    },
-    //T
+    };
+    vector<vec2> T =
     {
         vec2(1, 0),
         vec2(0, 1),
         vec2(1, 1),
         vec2(2,1)
-    },
-    //L
+    };
+    vector<vec2> L =
     {
         vec2(0, 0),
         vec2(0, 1),
         vec2(0, 2),
         vec2(1, 2)
-    },
-    //J
+    };
+    vector<vec2> J = 
     {
         vec2(1, 0),
         vec2(1, 1),
         vec2(1, 2),
         vec2(0, 2)
-    },
-    //Z
+    };
+    vector<vec2> Z =
     {
         vec2(0, 0),
         vec2(1, 0),
         vec2(1, 1),
         vec2(2, 1)
-    },
-    //S
+    };
+    vector<vec2> S = 
     {
         vec2(0, 1),
         vec2(1, 1),
         vec2(1, 0),
         vec2(2, 0)
-    }
+    };
 };
 
 vector<Color> colors;
 vector<int> colorCount;
 
-void spawnPiece(vec2 pos, vector<vec2> piece);
+void spawnPiece(vec2 pos, vector<vec2> piece, function<vector<any>(OnUpdateContext ctx)> pointsFunc);
 bool isInGrid(vec2 p, vec2 rp, vec2 rs);
 void dismantleGrid();
 void drawPiece(vec2 pos, vector<vec2> piece, Color col, RenderWindow& window);
 float clamp(float val, float minv, float maxv);
 void start();
 void endTurn();
+void updateThreadPool();
 
 int main()
 {
-    testCard.setPos(vec2(300, 300));
     start();
     while(window.isOpen())
     {
@@ -120,20 +121,16 @@ int main()
                     pe.removePoint(pe.getPointIndexAtPos(mousepos));
                 else if(mousepos.y < 700)
                 {
-                    spawnPiece(vec2(clamp(mousepos.x, 311, 710), 50), pieces[currentPiece]);
-                    currentPiece = rand()%pieces.size();
-                    //currentPiece = 2;
+                    
                 }
             }
             if(e->is<Event::KeyPressed>())
             {
                 Keyboard::Key key = e->getIf<Event::KeyPressed>() -> code;
                 if(key == Keyboard::Key::R)
-                    rotation = (rotation + 90)%360;
+                    rotation = (rotation + ANGLE_OFFSET_ON_ROT)%360;
                 else if(key == Keyboard::Key::A)
                     dismantleGrid();
-                else if(key == Keyboard::Key::F)
-                    testCard.flip(0.2f);
             }
             deck.update(e, mousepos);
         }
@@ -145,15 +142,10 @@ int main()
             point.setColor(colors[index]);
             colorCount.push_back(index);
         }
-
-
-
         for(int c = 0; c < VERTICAL; c++)
         {
             int line = count(colorCount.begin(), colorCount.end(), c);
-            if(line == COUNT_TO_LINE)
-            {
-
+            if(line == COUNT_TO_LINE) {
                 vector<int> indexArr;
                 for(int p = 0; p < pe.getPointCount(); p++)
                 {
@@ -174,7 +166,6 @@ int main()
                     pe.removePoint(index);
             }
         }
-        testCard.update(dt);
         deck.updateCards(dt, mousepos);
         pe.updatePointPos(dt, mousepos);
         pe.applyConstraints(2);
@@ -182,14 +173,38 @@ int main()
         window.clear(Color::Black);
         pe.display(window, DISPLAY_COLOR);
 
-        drawPiece(vec2(clamp(mousepos.x, 311, 710), 50), pieces[currentPiece], Color(DISPLAY_COLOR.r, DISPLAY_COLOR.g, DISPLAY_COLOR.b, 100), window);
+        updateThreadPool();
         deck.drawCards(window);
         ui.displayElements(window);
+
+		int indexToDestroy = -1;
+		int i = 0;
+		for(int i = 0; i < deck.cards.size(); i++)
+		{
+			Card& card = deck.cards[i];
+			if(card.getPos().y < 200 && card.getPos().x > 200)
+			{
+				card.setAlpha(100);
+        		drawPiece(vec2(clamp(card.getPos().x, 311, 710), 50), card.pieceOnPlace, Color(DISPLAY_COLOR.r, DISPLAY_COLOR.g, DISPLAY_COLOR.b, 100), window);
+				if(!deck.holding) indexToDestroy = i;
+			}
+			else card.setAlpha(255);
+		}
+		if(indexToDestroy >= 0 && deck.cards[indexToDestroy].getFlipped())
+		{
+			Card& card = deck.cards[indexToDestroy];
+			card.args = card.callOnUse(OnUseCardContext(pe, card.args, window, mousepos));
+			spawnPiece(vec2(clamp(card.getPos().x, 311, 710), 50), card.pieceOnPlace, card.pointsFunc);
+			deck.removeCard(indexToDestroy, vec2(window.getSize().x, window.getSize().y));
+		}
+
+		window.draw(placingZone);
         window.display();
         dt = deltaClock.restart().asSeconds();
-
         if(clock() - timer>= 1000)
         {
+            //for(auto& c : deck.cards) cout <<
+              //  "pos(sprite):" << c.getPos().x << ";" << c.getPos().y << "\npos(anchor)" << c.getAnchorPos().x << ";" << c.getAnchorPos().y << "\nSize:" << c.sprite.getSize().x << ";" << c.sprite.getSize().y << "scale:" << c.sprite.getScale().x << ";" << c.sprite.getScale().y<< endl;
             window.setTitle("Tetris Weird, FPS:" + to_string((int)floor(1.0f / dt)));
             timer = clock();
         }
@@ -198,38 +213,27 @@ int main()
 }
 
 
-void spawnPiece(vec2 pos, vector<vec2> piece)
+void spawnPiece(vec2 spawnPos, vector<vec2> piece, function<vector<any>(OnUpdateContext ctx)> pointsFunc)
 {
+    float theta = rotation * pi / 180.0f;
     int index1 = distance(piece.begin(), max_element(piece.begin(), piece.end(), [](const auto &a, const auto &b) { return a.x < b.x;}));
     int index2 = distance(piece.begin(), max_element(piece.begin(), piece.end(), [](const auto &a, const auto &b) { return a.y < b.y;}));
     float maxX = piece[index1].x;
     float maxY = piece[index2].y;
-
     int pointCount = pe.getPointCount();
-    for(auto& p : piece)
+    
+	for(auto& p : piece)
     {
         float theta = rotation * pi / 180.0f;
-        p -= vec2(maxX/2.0f, maxY/2.0f);
-        p = vec2(p.x * sin(theta) - p.y * cos(theta), p.x * cos(theta) - p.y * sin(theta));
-        pe.addPoint(pos + p * (float)RADIUS * 2.1f + vec2(RADIUS, RADIUS), false, true, RADIUS, 200.0f,
-                    [](OnUpdateContext ctx)
-                    {
-
-                        if(ctx.args.size() == 0)
-                        {
-                            vector<any> args;
-                            args.push_back(clock());
-                            return args;
-                        }
-                        else
-                        {
-                            //if(clock() - any_cast<clock_t>(ctx.args[0]) >= 5000) pe.getPoint(ctx.index).setIsStatic(true);
-                            return ctx.args;
-                        }
-
-
-                    });
-    }
+		vec2 pos = spawnPos + p * (float)RADIUS * 2.f;
+		vec2 size = vec2(maxX * (float)RADIUS * 2.f, maxY * (float)RADIUS * 2.f);
+		vec2 center = spawnPos + size * 0.5f;
+        pos -= center;
+        pos = vec2(pos.x * cos(theta) - pos.y * sin(theta), pos.x * sin(theta) + pos.y * cos(theta));
+        pos += center; 
+		pe.addPoint(pos, false, true, RADIUS, 200.0f, pointsFunc);
+	}
+   
     for(int i = 0; i < piece.size(); i++)
     {
         for(int j = 0; j < piece.size(); j++)
@@ -254,24 +258,29 @@ void dismantleGrid()
         pe.removeConstraints(i);
 }
 
-void drawPiece(vec2 pos, vector<vec2> piece, Color col, RenderWindow& window)
+void drawPiece(vec2 drawPos, vector<vec2> piece, Color col, RenderWindow& window)
 {
     CircleShape circle(RADIUS);
     circle.setFillColor(col);
     float theta = rotation * pi / 180.0f;
     int index1 = distance(piece.begin(), max_element(piece.begin(), piece.end(), [](const auto &a, const auto &b) { return a.x < b.x;}));
     int index2 = distance(piece.begin(), max_element(piece.begin(), piece.end(), [](const auto &a, const auto &b) { return a.y < b.y;}));
-
     float maxX = piece[index1].x;
     float maxY = piece[index2].y;
-    vec2 size;
-    for(auto& p : piece)
+    int pointCount = pe.getPointCount();
+    
+	for(auto& p : piece)
     {
-        p -= vec2(maxX/2.0f, maxY/2.0f);
-        p = vec2(p.x * sin(theta) - p.y * cos(theta), p.x * cos(theta) - p.y * sin(theta));
-        circle.setPosition(pos + p * 2.0f * (float)RADIUS);
+        float theta = rotation * pi / 180.0f;
+		vec2 pos = drawPos + p * (float)RADIUS * 2.f;
+		vec2 size = vec2(maxX * (float)RADIUS * 2.f, maxY * (float)RADIUS * 2.f);
+		vec2 center = drawPos + size * 0.5f;
+        pos -= center;
+        pos = vec2(pos.x * cos(theta) - pos.y * sin(theta), pos.x * sin(theta) + pos.y * cos(theta));
+        pos += center; 
+        circle.setPosition(pos - vec2(RADIUS, RADIUS));
         window.draw(circle);
-    }
+	}
 }
 
 
@@ -287,7 +296,6 @@ void start()
     window.setFramerateLimit(240);
     window.setVerticalSyncEnabled(false);
     float ratio = 700/10.f;
-    testCard.setCardTranslationDuration(0.5f);
     for(int i = 0; i < 9; i++)
     {
         pe.addRectangle(Rect<int>({200, i * ratio}, {ratio, ratio}), "res/grass_pillar_left.png");
@@ -297,10 +305,12 @@ void start()
     pe.addRectangle(Rect<int>({200 + 9 * ratio, 700 - ratio}, {ratio, ratio}), "res/no_grass.png");
     for(int i = 0; i < 10; i++)
     {
-        deck.cards.emplace_back(vec2(300 + i, 800 + i), vec2(150, 200), "res/long-I.png", "res/defaultCard.png");
+        deck.cards.emplace_back(vec2(300 + i, 800 + i), vec2(150, 200), "res/long-I.png", "res/defaultCard.png", [](OnUseCardContext ctx){cout << "card used\n"; return ctx.args;}, Piece::L, [](OnUpdateContext ctx){if(ctx.args.size() == 0)ctx.args.push_back(clock); /*else if(clock() - any_cast<clock_t>(ctx.args[0]) > 1000);*/; return ctx.args;});
     }
-    //pe.addPoint(vec2(256, 256), false, true, 30, 200, cluster);
-
+	placingZoneTexture.loadFromFile("res/placeZone.png");
+	placingZone.setTexture(&placingZoneTexture);
+	placingZone.setPosition({270, 0});
+	placingZone.setFillColor(Color(255, 255, 255, 120));
     deck.setCardsTranslationDuration(0.2f);
     colors.push_back(Color(116, 0, 184));
     colors.push_back(Color(105, 48, 195));
@@ -315,10 +325,22 @@ void start()
     srand(time(nullptr));
     ui.font = Font("res/font.ttf");
     ui.addButton(vec2(window.getSize().x, window.getSize().y)- vec2(200, 100), vec2(100, 50), endTurn, "EndTurn");
-    deck.giveHand(5, window.getSize(), 110.0f);
+    pool.emplace_back(std::async([&deck, &window](){deck.giveHand(5, window.getSize(), 110.0f);}));
 }
 
 void endTurn()
 {
     cout << "turn ended\n";
+}
+
+void updateThreadPool()
+{
+    vector<int> toDelete;
+    for(int i = 0; i < pool.size(); i++)
+    {
+        if(pool[i].wait_for(0ms) == future_status::ready)
+            toDelete.push_back(i);
+    }
+    sort(toDelete.begin(), toDelete.end(), greater<int>());
+    for(auto& i : toDelete) pool.erase(pool.begin() + i);
 }
