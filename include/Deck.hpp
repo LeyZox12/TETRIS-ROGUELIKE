@@ -64,12 +64,10 @@ struct Deck
 				
     }
 
-    void giveHand(int cardCount, vec2u winSize, float spacing)
+    void giveHand(int cardCount, float spacing, float angle, vec2 center)
     {
         this_thread::sleep_for(400ms);
-        float angle = 110;
         float ratio = angle / cardCount;
-        vec2 center = vec2(winSize.x / 2.f, winSize.y);
         float sides = (180 - angle) / 2.f;
         for(int i = 0; i < cardCount; i++)
         {
@@ -97,7 +95,7 @@ struct Deck
 
     }
 	
-	void removeCard(int index, vec2 winSize)
+	void removeCard(int index, float spacing, float angle, vec2 center)
 	{
 		if(index >= 0 && index < cards.size())
 		{
@@ -105,11 +103,7 @@ struct Deck
 			if(count(hand.begin(), hand.end(), index) == 1)hand.erase(find(hand.begin(), hand.end(), index));
 			for(auto& handIndex : hand) if(handIndex > index) handIndex--;
 		}
-		cout << hand.size() << endl;		
-        float spacing = 110;
-		float angle = 110;
         float ratio = angle / hand.size();
-        vec2 center = vec2(winSize.x / 2.f, winSize.y);
         float sides = (180 - angle) / 2.f;
 		float i = 0.5f;
         for(auto& index : hand)

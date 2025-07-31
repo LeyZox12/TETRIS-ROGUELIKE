@@ -20,7 +20,8 @@ class Card
 {
     public:
         Card();
-        Card(vec2 anchorPos, vec2 size, string frontTexturePath, string backTexturePath, function<vector<any>(OnUseCardContext ctx)> onUse, vector<vec2> pieceOnPlace, function<vector<any>(OnUpdateContext ctx)> pointsFunc);
+        Card(vec2 anchorPos, vec2 size, string id, string frontTexturePath, string backTexturePath, function<vector<any>(OnUseCardContext ctx)> onUse, vector<vec2> pieceOnPlace, function<vector<any>(OnUpdateContext ctx)> pointsFunc);
+        Card(string id, string name, int rarity, string frontTexturePath, string backTexturePath, function<vector<any>(OnUseCardContext ctx)> onUse, vector<vec2> pieceOnPlace, function<vector<any>(OnUpdateContext ctx)> pointsFunc);
         void flip(float durationSeconds);
         void setSize(vec2 size);
         void setFlipped(bool state, float durationSeconds);
@@ -39,16 +40,22 @@ class Card
         vec2 getAnchorPos();
         void draw(RenderWindow& window);
         RectangleShape sprite;
+		int getRarity();
+		string getName();
+		string getId();
 		bool getFlipped();
 		vector<any> args;
 		vector<vec2> pieceOnPlace;
 		function<vector<any>(OnUpdateContext ctx)> pointsFunc;
     private:
         bool flipped;
-        vec2 targetScale;
-        float speed = 1.0;
+        vec2 targetScale = vec2(-1, 1);
+		float speed = 1.0;
         float animationDuration = 1.0;
         float targetRotation = 0.f;
+		string id;
+		string name;
+		int rarity;
         vec2 anchorPos;
 		function<vector<any>(OnUseCardContext ctx)> onUse;
         Texture frontTexture;

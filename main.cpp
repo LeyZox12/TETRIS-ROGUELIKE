@@ -4,8 +4,10 @@
 #include <thread>
 #include <future>
 #include "Deck.hpp"
+#include "CardRegistry.hpp"
 #include "OnUseCardContext.hpp"
 #include "../../class/UIutils.h"
+#include "include/cards.hpp"
 #define pi 3.141592654
 
 using namespace std;
@@ -18,6 +20,8 @@ RenderWindow window(VideoMode({1000, 1000}), "Tetris Weird");
 PointEngine pe;
 UIutils ui;
 vector<future<void>> pool;
+
+CardRegistry cardRegistry;
 
 const int BORDER_SIZE = 100;
 const int RADIUS = (window.getSize().x - 2 * BORDER_SIZE) / 20 - 1;
@@ -32,63 +36,13 @@ float dt = 0.016f;
 int rotation = 0;
 int currentPiece = 0;
 int timer = 0;
+float cardAngle = 110;
+float cardSpacing = 300;
+vec2 center = vec2(window.getSize().x/2.f, window.getSize().y + window.getSize().y * 0.1);
 RectangleShape placingZone({560, 200});
 Texture placingZoneTexture;
 
 Deck deck;
-namespace Piece
-{
-    vector<vec2> square =
-    {
-        vec2(0, 0),
-        vec2(0, 1),
-        vec2(1, 1),
-        vec2(1, 0)
-    };
-    vector<vec2> I =
-    {
-        vec2(0, 0),
-        vec2(0, 1),
-        vec2(0, 2),
-        vec2(0,3)
-    };
-    vector<vec2> T =
-    {
-        vec2(1, 0),
-        vec2(0, 1),
-        vec2(1, 1),
-        vec2(2,1)
-    };
-    vector<vec2> L =
-    {
-        vec2(0, 0),
-        vec2(0, 1),
-        vec2(0, 2),
-        vec2(1, 2)
-    };
-    vector<vec2> J = 
-    {
-        vec2(1, 0),
-        vec2(1, 1),
-        vec2(1, 2),
-        vec2(0, 2)
-    };
-    vector<vec2> Z =
-    {
-        vec2(0, 0),
-        vec2(1, 0),
-        vec2(1, 1),
-        vec2(2, 1)
-    };
-    vector<vec2> S = 
-    {
-        vec2(0, 1),
-        vec2(1, 1),
-        vec2(1, 0),
-        vec2(2, 0)
-    };
-};
-
 vector<Color> colors;
 vector<int> colorCount;
 
@@ -190,12 +144,12 @@ int main()
 			}
 			else card.setAlpha(255);
 		}
-		if(indexToDestroy >= 0 && deck.cards[indexToDestroy].getFlipped())
+		if(indexToDestroy >= 0 && !deck.cards[indexToDestroy].getFlipped())
 		{
 			Card& card = deck.cards[indexToDestroy];
 			card.args = card.callOnUse(OnUseCardContext(pe, card.args, window, mousepos));
 			spawnPiece(vec2(clamp(card.getPos().x, 311, 710), 50), card.pieceOnPlace, card.pointsFunc);
-			deck.removeCard(indexToDestroy, vec2(window.getSize().x, window.getSize().y));
+			deck.removeCard(indexToDestroy, cardSpacing, cardAngle, center);
 		}
 
 		window.draw(placingZone);
@@ -221,7 +175,6 @@ void spawnPiece(vec2 spawnPos, vector<vec2> piece, function<vector<any>(OnUpdate
     float maxX = piece[index1].x;
     float maxY = piece[index2].y;
     int pointCount = pe.getPointCount();
-    
 	for(auto& p : piece)
     {
         float theta = rotation * pi / 180.0f;
@@ -268,7 +221,6 @@ void drawPiece(vec2 drawPos, vector<vec2> piece, Color col, RenderWindow& window
     float maxX = piece[index1].x;
     float maxY = piece[index2].y;
     int pointCount = pe.getPointCount();
-    
 	for(auto& p : piece)
     {
         float theta = rotation * pi / 180.0f;
@@ -295,6 +247,7 @@ void start()
 {
     window.setFramerateLimit(240);
     window.setVerticalSyncEnabled(false);
+	load(cardRegistry);
     float ratio = 700/10.f;
     for(int i = 0; i < 9; i++)
     {
@@ -303,9 +256,14 @@ void start()
         pe.addRectangle(Rect<int>({200+i * ratio, 700 - ratio}, {ratio, ratio}), i == 0 ? "res/no_grass.png" : "res/grass_bottom.png");
     }
     pe.addRectangle(Rect<int>({200 + 9 * ratio, 700 - ratio}, {ratio, ratio}), "res/no_grass.png");
-    for(int i = 0; i < 10; i++)
+	vector<string> ids = {"square_classic", "I_classic", "L_classic", "J_classic", "Z_classic", "S_classic", "T_classic"};
+    for(int i = 0; i < ids.size(); i++)
     {
-        deck.cards.emplace_back(vec2(300 + i, 800 + i), vec2(150, 200), "res/long-I.png", "res/defaultCard.png", [](OnUseCardContext ctx){cout << "card used\n"; return ctx.args;}, Piece::L, [](OnUpdateContext ctx){if(ctx.args.size() == 0)ctx.args.push_back(clock); /*else if(clock() - any_cast<clock_t>(ctx.args[0]) > 1000);*/; return ctx.args;});
+		//deck.cards.push_back(cardRegistry.getRandomCard(0));
+		deck.cards.push_back(cardRegistry.getById(ids[i]));
+		deck.cards[deck.cards.size()-1].setAnchorPos(vec2(200 - i, 800 - i));
+		deck.cards[deck.cards.size()-1].sprite.setSize(vec2(150, 200));
+        deck.cards[deck.cards.size()-1].sprite.setOrigin({75, 100});
     }
 	placingZoneTexture.loadFromFile("res/placeZone.png");
 	placingZone.setTexture(&placingZoneTexture);
@@ -325,7 +283,7 @@ void start()
     srand(time(nullptr));
     ui.font = Font("res/font.ttf");
     ui.addButton(vec2(window.getSize().x, window.getSize().y)- vec2(200, 100), vec2(100, 50), endTurn, "EndTurn");
-    pool.emplace_back(std::async([&deck, &window](){deck.giveHand(5, window.getSize(), 110.0f);}));
+    pool.emplace_back(std::async([&deck, &window](){deck.giveHand(7, cardSpacing, cardAngle, center);}));
 }
 
 void endTurn()
