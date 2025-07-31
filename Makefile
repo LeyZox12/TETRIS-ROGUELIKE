@@ -17,7 +17,7 @@ PointEngine.o : ../../class/PointEngine/src/PointEngine.cpp
 	g++ $(CXXFLAGS) -c  $(POINTENGINE)/src/PointEngine.cpp -I"../../class/PointEngine/src/PointEngine.h"
 
 Point.o : ../../class/PointEngine/src/Point.cpp
-	g++ $(CXXFLAGS) -c $(POINTENGINE)/src/PointEngine.cpp
+	g++ $(CXXFLAGS) -c $(POINTENGINE)/src/Point.cpp
 
 Rectangle.o : ../../class/PointEngine/src/Rectangle.cpp
 	g++ $(CXXFLAGS) -c $(POINTENGINE)/src/Rectangle.cpp
@@ -26,4 +26,4 @@ PhysicConstraint.o : ../../class/PointEngine/src/PhysicConstraint.cpp
 	g++ $(CXXFLAGS) -c $(POINTENGINE)/src/PhysicConstraint.cpp
 
 clean : 
-	rm main.o Card.o UIutils.o PointEngine.o PhysicConstraint.o Rectangle.o
+	del main.o Card.o UIutils.o PointEngine.o PhysicConstraint.o Rectangle.o cards.o Point.o
